@@ -276,24 +276,28 @@ class Autoencoder3f(nn.Module):
         self.view_pool = getattr(F, config.view_encoder.global_pool) if config.view_encoder.global_pool is not None else None
 
     def forward(self, seqs):
-        return self.reconstruct(seqs)
+        pass
 
+    @torch.jit.export
     def encode_motion(self, seqs):
         motion_code_seq = self.motion_encoder(seqs)
         return motion_code_seq
 
+    @torch.jit.export
     def encode_body(self, seqs):
         body_code_seq = self.body_encoder(seqs)
         kernel_size = body_code_seq.size(-1)
         body_code = self.body_pool(body_code_seq, kernel_size)  if self.body_pool is not None else body_code_seq
         return body_code, body_code_seq
 
+    @torch.jit.export
     def encode_view(self, seqs):
         view_code_seq = self.view_encoder(seqs)
         kernel_size = view_code_seq.size(-1)
         view_code = self.view_pool(view_code_seq, kernel_size)  if self.view_pool is not None else view_code_seq
         return view_code, view_code_seq
 
+    @torch.jit.export
     def decode(self, motion_code, body_code, view_code):
         if body_code.size(-1) == 1:
             body_code = body_code.repeat(1, 1, motion_code.shape[-1])
@@ -303,6 +307,7 @@ class Autoencoder3f(nn.Module):
         out = self.decoder(complete_code)
         return out
 
+    @torch.jit.export
     def cross3d(self, x_a, x_b, x_c, meanpose=None, stdpose=None):
         motion_a = self.encode_motion(x_a)
         body_b, _ = self.encode_body(x_b)
@@ -310,6 +315,7 @@ class Autoencoder3f(nn.Module):
         out = self.decode(motion_a, body_b, view_c)
         return out
 
+    @torch.jit.export
     def cross2d(self, x_a, x_b, x_c, meanpose, stdpose):
         motion_a = self.encode_motion(x_a)
         body_b, _ = self.encode_body(x_b)
@@ -318,6 +324,7 @@ class Autoencoder3f(nn.Module):
         out = rotate_and_maybe_project_learning(out, meanpose, stdpose, body_reference=self.body_reference, project_2d=True)
         return out
 
+    @torch.jit.export
     def reconstruct3d(self, x, meanpose=None, stdpose=None):
         motion_code = self.encode_motion(x)
         body_code, _ = self.encode_body(x)
@@ -325,6 +332,7 @@ class Autoencoder3f(nn.Module):
         out = self.decode(motion_code, body_code, view_code)
         return out
 
+    @torch.jit.export
     def reconstruct2d(self, x, meanpose, stdpose):
         motion_code = self.encode_motion(x)
         body_code, _ = self.encode_body(x)
@@ -333,6 +341,7 @@ class Autoencoder3f(nn.Module):
         out = rotate_and_maybe_project_learning(out, meanpose, stdpose, body_reference=self.body_reference, project_2d=True)
         return out
 
+    @torch.jit.export
     def interpolate(self, x_a, x_b, meanpose, stdpose, N):
 
         step_size = 1. / (N-1)
@@ -386,24 +395,28 @@ class Autoencoder3fCanonical(nn.Module):
         self.view_pool = getattr(F, config.view_encoder.global_pool) if config.view_encoder.global_pool is not None else None
 
     def forward(self, seqs):
-        return self.reconstruct(seqs)
+        pass
 
+    @torch.jit.export
     def encode_motion(self, seqs):
         motion_code_seq = self.motion_encoder(seqs)
         return motion_code_seq
 
+    @torch.jit.export
     def encode_body(self, seqs):
         body_code_seq = self.body_encoder(seqs)
         kernel_size = body_code_seq.size(-1)
         body_code = self.body_pool(body_code_seq, kernel_size)  if self.body_pool is not None else body_code_seq
         return body_code, body_code_seq
 
+    @torch.jit.export
     def encode_view(self, seqs):
         view_code_seq = self.view_encoder(seqs)
         kernel_size = view_code_seq.size(-1)
         view_code = self.view_pool(view_code_seq, kernel_size)  if self.view_pool is not None else view_code_seq
         return view_code, view_code_seq
 
+    @torch.jit.export
     def decode(self, motion_code, body_code):
 
         if body_code.size(-1) == 1:
@@ -412,6 +425,7 @@ class Autoencoder3fCanonical(nn.Module):
         X = self.decoder(complete_code)
         return X
 
+    @torch.jit.export
     def cross3d(self, x_a, x_b, x_c, meanpose, stdpose):
 
         motion_a = self.encode_motion(x_a)
@@ -426,6 +440,7 @@ class Autoencoder3fCanonical(nn.Module):
 
         return X
 
+    @torch.jit.export
     def cross2d(self, x_a, x_b, x_c, meanpose, stdpose):
 
         motion_a = self.encode_motion(x_a)
@@ -440,6 +455,7 @@ class Autoencoder3fCanonical(nn.Module):
 
         return x
     
+    @torch.jit.export
     def cross2d_cano(self, x_a, x_b, meanpose, stdpose):
         motion_a = self.encode_motion(x_a)
         body_b, _ = self.encode_body(x_b)
@@ -449,6 +465,7 @@ class Autoencoder3fCanonical(nn.Module):
 
         return x
 
+    @torch.jit.export
     def reconstruct3d(self, x, meanpose, stdpose):
 
         motion_code = self.encode_motion(x)
@@ -463,6 +480,7 @@ class Autoencoder3fCanonical(nn.Module):
 
         return X
 
+    @torch.jit.export
     def reconstruct2d(self, x, meanpose, stdpose):
 
         motion_code = self.encode_motion(x)
@@ -477,6 +495,7 @@ class Autoencoder3fCanonical(nn.Module):
 
         return x
 
+    @torch.jit.export
     def interpolate(self, x_a, x_b, meanpose, stdpose, N):
 
         # TODO: implement interpolation of SO3
