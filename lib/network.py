@@ -272,8 +272,8 @@ class Autoencoder3f(nn.Module):
         self.view_encoder = view_cls.build_from_config(config.view_encoder)
         self.decoder = ConvDecoder.build_from_config(config.decoder)
 
-        self.body_pool = getattr(F, config.body_encoder.global_pool) if config.body_encoder.global_pool is not None else None
-        self.view_pool = getattr(F, config.view_encoder.global_pool) if config.view_encoder.global_pool is not None else None
+        # self.body_pool = getattr(F, config.body_encoder.global_pool) if config.body_encoder.global_pool is not None else None
+        # self.view_pool = getattr(F, config.view_encoder.global_pool) if config.view_encoder.global_pool is not None else None
 
     def forward(self, seqs):
         pass
@@ -287,14 +287,14 @@ class Autoencoder3f(nn.Module):
     def encode_body(self, seqs):
         body_code_seq = self.body_encoder(seqs)
         kernel_size = body_code_seq.size(-1)
-        body_code = self.body_pool(body_code_seq, kernel_size)  if self.body_pool is not None else body_code_seq
+        body_code = F.max_pool1d(body_code_seq, kernel_size)
         return body_code, body_code_seq
 
     @torch.jit.export
     def encode_view(self, seqs):
         view_code_seq = self.view_encoder(seqs)
         kernel_size = view_code_seq.size(-1)
-        view_code = self.view_pool(view_code_seq, kernel_size)  if self.view_pool is not None else view_code_seq
+        view_code = view_code_seq
         return view_code, view_code_seq
 
     @torch.jit.export
@@ -391,8 +391,8 @@ class Autoencoder3fCanonical(nn.Module):
         self.view_encoder = view_cls.build_from_config(config.view_encoder)
         self.decoder = ConvDecoder.build_from_config(config.decoder)
 
-        self.body_pool = getattr(F, config.body_encoder.global_pool) if config.body_encoder.global_pool is not None else None
-        self.view_pool = getattr(F, config.view_encoder.global_pool) if config.view_encoder.global_pool is not None else None
+        # self.body_pool = getattr(F, config.body_encoder.global_pool) if config.body_encoder.global_pool is not None else None
+        # self.view_pool = getattr(F, config.view_encoder.global_pool) if config.view_encoder.global_pool is not None else None
 
     def forward(self, seqs):
         pass
@@ -406,14 +406,14 @@ class Autoencoder3fCanonical(nn.Module):
     def encode_body(self, seqs):
         body_code_seq = self.body_encoder(seqs)
         kernel_size = body_code_seq.size(-1)
-        body_code = self.body_pool(body_code_seq, kernel_size)  if self.body_pool is not None else body_code_seq
+        body_code = F.max_pool1d(body_code_seq, kernel_size)
         return body_code, body_code_seq
 
     @torch.jit.export
     def encode_view(self, seqs):
         view_code_seq = self.view_encoder(seqs)
         kernel_size = view_code_seq.size(-1)
-        view_code = self.view_pool(view_code_seq, kernel_size)  if self.view_pool is not None else view_code_seq
+        view_code = view_code_seq
         return view_code, view_code_seq
 
     @torch.jit.export
@@ -496,7 +496,7 @@ class Autoencoder3fCanonical(nn.Module):
         return x
 
     @torch.jit.export
-    def interpolate(self, x_a, x_b, meanpose, stdpose, N):
+    def interpolate(self, x_a, x_b, meanpose, stdpose, N: int):
 
         # TODO: implement interpolation of SO3
 

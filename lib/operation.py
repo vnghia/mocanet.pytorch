@@ -1,3 +1,4 @@
+from typing import Optional
 import torch
 import torch.nn.functional as F
 import numpy as np
@@ -10,8 +11,8 @@ from lib.util.general import get_config
 from lib.util.visualization import motion2video_array, hex2rgb
 import os
 
-eps = 1e-16
-
+def eps_fn():
+    return 1e-16
 
 def localize_motion_torch(motion):
     """
@@ -86,7 +87,7 @@ def globalize_motion_torch(motion):
     return motion_inv
 
 
-def restore_world_space(motion, meanpose, stdpose, n_joints=15):
+def restore_world_space(motion, meanpose, stdpose, n_joints: int = 15):
     B, C, T = motion.size()
     motion = motion.view(B, n_joints, C // n_joints, T)
     motion = normalize_motion_inv_torch(motion, meanpose, stdpose)
@@ -101,28 +102,27 @@ def convert_to_learning_space(motion, meanpose, stdpose):
     motion = motion.view(B, J*D, T)
     return motion
 
+# batch*n
+def normalize_vector(v):
+    batch = v.shape[0]
+    v_mag = torch.sqrt(v.pow(2).sum(1))  # batch
+    v_mag = torch.max(v_mag, torch.tensor([eps_fn()], device=v.device))
+    v_mag = v_mag.view(batch, 1).expand(batch, v.shape[1])
+    v = v / v_mag
+    return v
+
+# u, v batch*n
+def cross_product(u, v):
+    batch = u.shape[0]
+    i = u[:, 1] * v[:, 2] - u[:, 2] * v[:, 1]
+    j = u[:, 2] * v[:, 0] - u[:, 0] * v[:, 2]
+    k = u[:, 0] * v[:, 1] - u[:, 1] * v[:, 0]
+    out = torch.cat((i.view(batch, 1), j.view(batch, 1), k.view(batch, 1)), 1)  # batch*3
+    return out
 
 # poses batch*6
 # poses
 def ortho6d_to_so3(poses):
-    # batch*n
-    def normalize_vector(v):
-        batch = v.shape[0]
-        v_mag = torch.sqrt(v.pow(2).sum(1))  # batch
-        v_mag = torch.max(v_mag, torch.tensor([eps], device=v.device))
-        v_mag = v_mag.view(batch, 1).expand(batch, v.shape[1])
-        v = v / v_mag
-        return v
-
-    # u, v batch*n
-    def cross_product(u, v):
-        batch = u.shape[0]
-        i = u[:, 1] * v[:, 2] - u[:, 2] * v[:, 1]
-        j = u[:, 2] * v[:, 0] - u[:, 0] * v[:, 2]
-        k = u[:, 0] * v[:, 1] - u[:, 1] * v[:, 0]
-        out = torch.cat((i.view(batch, 1), j.view(batch, 1), k.view(batch, 1)), 1)  # batch*3
-        return out
-
     x_raw = poses[:, 0:3]  # batch*3
     y_raw = poses[:, 3:6]  # batch*3
 
@@ -151,11 +151,11 @@ def get_body_basis(motion_3d):
     # 2 RightArm 5 LeftArm 9 RightUpLeg 12 LeftUpLeg
     horizontal = (motion_3d[:, 2] - motion_3d[:, 5] + motion_3d[:, 9] - motion_3d[:, 12]) / 2 # [B, 3, T]
     horizontal = horizontal.mean(dim=-1) # [B, 3]
-    horizontal = horizontal / horizontal.norm(dim=-1).unsqueeze(-1) # [B, 3]
+    horizontal = horizontal / horizontal.norm(p=2, dim=-1).unsqueeze(-1) # [B, 3]
 
     vector_z = torch.tensor([0., 0., 1.], device=motion_3d.device, dtype=motion_3d.dtype).unsqueeze(0).repeat(B, 1) # [B, 3]
     vector_y = torch.cross(horizontal, vector_z)   # [B, 3]
-    vector_y = vector_y / vector_y.norm(dim=-1).unsqueeze(-1)
+    vector_y = vector_y / vector_y.norm(p=2, dim=-1).unsqueeze(-1)
     vector_x = torch.cross(vector_y, vector_z)
     vectors = torch.stack([vector_x, vector_y, vector_z], dim=2)  # [B, 3, 3]
 
@@ -229,7 +229,7 @@ def rotate_basis_ortho6d(basis_vectors, ortho6d):
     return basis_vectors
 
 
-def change_of_basis(motion_3d, basis_vectors=None, project_2d=False):
+def change_of_basis(motion_3d, basis_vectors: Optional[torch.Tensor] = None, project_2d: bool = False):
     # motion_3d: (B, J, 3, T)
     # basis_vectors: (B, K, T, 3, 3)
 
@@ -246,7 +246,7 @@ def change_of_basis(motion_3d, basis_vectors=None, project_2d=False):
     return motion_proj
 
 
-def rotate_and_maybe_project_world(X, angles=None, ortho6d=None, body_reference=True, project_2d=False):
+def rotate_and_maybe_project_world(X, angles: Optional[torch.Tensor] = None, ortho6d: Optional[torch.Tensor] = None, body_reference: bool = True, project_2d: bool = False):
     """
     :param X: B x J x D x T
     :return:
@@ -255,8 +255,8 @@ def rotate_and_maybe_project_world(X, angles=None, ortho6d=None, body_reference=
     B, J, D, T = X.size()
     D_out = 2 if project_2d else 3
 
-    if angles is not None and ortho6d is not None:
-        raise Exception("Can only provide one type of rotation representation")
+    # if angles is not None and ortho6d is not None:
+    #     raise Exception("Can only provide one type of rotation representation")
 
     if angles is not None:
         K = angles.size(1)
@@ -279,7 +279,7 @@ def rotate_and_maybe_project_world(X, angles=None, ortho6d=None, body_reference=
     return X_trans
 
 
-def rotate_and_maybe_project_learning(X, meanpose, stdpose, angles=None, ortho6d=None, body_reference=True, project_2d=False, n_joints=15):
+def rotate_and_maybe_project_learning(X, meanpose, stdpose, angles: Optional[torch.Tensor] = None, ortho6d: Optional[torch.Tensor] = None, body_reference: bool = True, project_2d: bool = False, n_joints: int = 15):
     X = restore_world_space(X, meanpose, stdpose, n_joints)
     X = rotate_and_maybe_project_world(X, angles, ortho6d, body_reference, project_2d)
     X = convert_to_learning_space(X, meanpose, stdpose)
@@ -310,7 +310,7 @@ def limb_seq_var(X, meanpose, stdpose, n_joints=15):
     B = motion.shape[0]
     motion = motion.reshape([B,15,3,-1])
     limbs = get_limbs_batch(motion)
-    limb_lengths = torch.norm(limbs, dim=2)
+    limb_lengths = torch.norm(limbs, p=2, dim=2)
     return torch.var(limb_lengths, dim=2)
 
 
